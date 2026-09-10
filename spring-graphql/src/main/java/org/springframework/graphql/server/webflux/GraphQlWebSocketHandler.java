@@ -43,13 +43,17 @@ import org.springframework.graphql.server.WebSocketSessionInfo;
 import org.springframework.graphql.server.support.GraphQlWebSocketMessage;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.codec.CodecConfigurer;
+import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.web.reactive.socket.CloseStatus;
 import org.springframework.web.reactive.socket.HandshakeInfo;
 import org.springframework.web.reactive.socket.WebSocketHandler;
 import org.springframework.web.reactive.socket.WebSocketMessage;
 import org.springframework.web.reactive.socket.WebSocketSession;
+import org.springframework.web.server.ServerWebExchange;
 
 /**
  * WebSocketHandler for GraphQL based on
@@ -59,7 +63,7 @@ import org.springframework.web.reactive.socket.WebSocketSession;
  * @author Rossen Stoyanchev
  * @since 1.0.0
  */
-public class GraphQlWebSocketHandler implements WebSocketHandler {
+public class GraphQlWebSocketHandler implements WebSocketHandler, CorsConfigurationSource {
 
 	private static final Log logger = LogFactory.getLog(GraphQlWebSocketHandler.class);
 
@@ -74,6 +78,9 @@ public class GraphQlWebSocketHandler implements WebSocketHandler {
 
 	private final Duration initTimeoutDuration;
 
+	@Nullable
+	private final CorsConfiguration corsConfiguration;
+
 
 	/**
 	 * Create a new instance.
@@ -85,17 +92,40 @@ public class GraphQlWebSocketHandler implements WebSocketHandler {
 	public GraphQlWebSocketHandler(
 			WebGraphQlHandler graphQlHandler, CodecConfigurer codecConfigurer, Duration connectionInitTimeout) {
 
+		this(graphQlHandler, codecConfigurer, connectionInitTimeout, new CorsConfiguration());
+	}
+
+	/**
+	 * Create a new instance.
+	 * @param graphQlHandler common handler for GraphQL over WebSocket requests
+	 * @param codecConfigurer codec configurer for JSON encoding and decoding
+	 * @param connectionInitTimeout how long to wait after the establishment of
+	 * the WebSocket for the {@code "connection_ini"} message from the client.
+	 * @param corsConfiguration the CORS configuration to use, a {@code null}
+	 * configuration means no CORS check.
+	 */
+	public GraphQlWebSocketHandler(
+			WebGraphQlHandler graphQlHandler, CodecConfigurer codecConfigurer, Duration connectionInitTimeout,
+			@Nullable CorsConfiguration corsConfiguration) {
+
 		Assert.notNull(graphQlHandler, "WebGraphQlHandler is required");
 
 		this.graphQlHandler = graphQlHandler;
 		this.webSocketInterceptor = this.graphQlHandler.getWebSocketInterceptor();
 		this.codecDelegate = new CodecDelegate(codecConfigurer);
 		this.initTimeoutDuration = connectionInitTimeout;
+		this.corsConfiguration = corsConfiguration;
 	}
 
 
 	public List<String> getSubProtocols() {
 		return SUB_PROTOCOL_LIST;
+	}
+
+	@Override
+	@Nullable
+	public CorsConfiguration getCorsConfiguration(ServerWebExchange exchange) {
+		return this.corsConfiguration;
 	}
 
 
