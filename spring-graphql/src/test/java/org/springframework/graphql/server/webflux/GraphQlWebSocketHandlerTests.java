@@ -47,6 +47,10 @@ import org.springframework.graphql.server.WebSocketSessionInfo;
 import org.springframework.graphql.server.support.GraphQlWebSocketMessage;
 import org.springframework.graphql.server.support.GraphQlWebSocketMessageType;
 import org.springframework.http.codec.ServerCodecConfigurer;
+import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
+import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.DefaultCorsProcessor;
 import org.springframework.http.codec.json.Jackson2JsonDecoder;
 import org.springframework.web.reactive.socket.CloseStatus;
 import org.springframework.web.reactive.socket.WebSocketMessage;
@@ -249,6 +253,30 @@ public class GraphQlWebSocketHandlerTests extends WebSocketHandlerTestSupport {
 				.expectNext(new CloseStatus(4429, "Too many initialisation requests"))
 				.expectComplete()
 				.verify(TIMEOUT);
+	}
+
+	@Test // CVE-2026-41700
+	void shipsDefaultCorsConfiguration() {
+		DefaultCorsProcessor corsProcessor = new DefaultCorsProcessor();
+		GraphQlWebSocketHandler handler = new GraphQlWebSocketHandler(
+				initHandler(), ServerCodecConfigurer.create(), Duration.ofSeconds(60));
+
+		MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("https://spring.io/graphql")
+				.header("Origin", "https://example.org"));
+		assertThat(corsProcessor.process(handler.getCorsConfiguration(exchange), exchange)).isFalse();
+	}
+
+	@Test // CVE-2026-41700
+	void allowsCustomCorsConfiguration() {
+		CorsConfiguration config = new CorsConfiguration();
+		config.addAllowedOrigin("https://example.org");
+		DefaultCorsProcessor corsProcessor = new DefaultCorsProcessor();
+		GraphQlWebSocketHandler handler = new GraphQlWebSocketHandler(
+				initHandler(), ServerCodecConfigurer.create(), Duration.ofSeconds(60), config);
+
+		MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.get("https://spring.io/graphql")
+				.header("Origin", "https://example.org"));
+		assertThat(corsProcessor.process(handler.getCorsConfiguration(exchange), exchange)).isTrue();
 	}
 
 	@Test

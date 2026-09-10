@@ -51,10 +51,14 @@ import org.springframework.http.HttpInputMessage;
 import org.springframework.http.converter.GenericHttpMessageConverter;
 import org.springframework.http.converter.HttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.lang.Nullable;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketMessage;
+import org.springframework.web.socket.server.support.OriginHandshakeInterceptor;
+import org.springframework.web.socket.server.support.WebSocketHttpRequestHandler;
 
 import static org.assertj.core.api.Assertions.as;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -73,6 +77,28 @@ public class GraphQlWebSocketHandlerTests extends WebSocketHandlerTestSupport {
 
 	private final GraphQlWebSocketHandler handler = initWebSocketHandler();
 
+
+	@Test // CVE-2026-41700
+	void rejectsWebSocketUpgradeFromAnotherOrigin() throws Exception {
+		// Uses only API that exists on the unpatched baseline -- the three-argument constructor
+		// and asWebSocketHttpRequestHandler -- so it compiles against, and fails on, the
+		// pre-fix tree. Before the fix no Origin check ran on the handshake at all and this
+		// upgrade was accepted; after it, OriginHandshakeInterceptor's default (same-origin
+		// only) refuses it with 403.
+		GraphQlWebSocketHandler webSocketHandler =
+				new GraphQlWebSocketHandler(initHandler(), converter, Duration.ofSeconds(60));
+		// A stub HandshakeHandler: the origin check runs in a HandshakeInterceptor, BEFORE the
+		// handshake handler, so no servlet-container upgrade strategy is needed to observe it.
+		WebSocketHttpRequestHandler httpRequestHandler = webSocketHandler
+				.asWebSocketHttpRequestHandler((request, response, wsHandler, attributes) -> false);
+
+		MockHttpServletRequest request = new MockHttpServletRequest("GET", "https://spring.io/graphql");
+		request.addHeader("Origin", "https://example.org");
+		MockHttpServletResponse response = new MockHttpServletResponse();
+		httpRequestHandler.handleRequest(request, response);
+
+		assertThat(response.getStatus()).isEqualTo(403);
+	}
 
 	@Test
 	void query() throws Exception {
@@ -379,8 +405,12 @@ public class GraphQlWebSocketHandlerTests extends WebSocketHandlerTestSupport {
 				new TestThreadLocalAccessor<>(threadLocal), threadLocalInterceptor);
 
 		// Use HandshakeInterceptor to capture ThreadLocal context
+		// Select the context interceptor by TYPE rather than by index: the CVE-2026-41700 fix
+		// prepends an OriginHandshakeInterceptor, so index 0 is no longer the context one.
 		handler.asWebSocketHttpRequestHandler((request, response, wsHandler, attributes) -> false)
-				.getHandshakeInterceptors().get(0)
+				.getHandshakeInterceptors().stream()
+				.filter((interceptor) -> !(interceptor instanceof OriginHandshakeInterceptor))
+				.findFirst().orElseThrow(IllegalStateException::new)
 				.beforeHandshake(null, null, null, this.session.getAttributes());
 
 		// Context should propagate, if message is handled on different thread

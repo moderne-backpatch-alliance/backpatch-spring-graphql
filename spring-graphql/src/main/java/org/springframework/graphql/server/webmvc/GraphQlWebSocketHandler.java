@@ -26,6 +26,7 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.security.Principal;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -66,6 +67,7 @@ import org.springframework.http.server.ServerHttpResponse;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.CollectionUtils;
+import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.SubProtocolCapable;
 import org.springframework.web.socket.TextMessage;
@@ -75,6 +77,7 @@ import org.springframework.web.socket.handler.ExceptionWebSocketHandlerDecorator
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import org.springframework.web.socket.server.HandshakeHandler;
 import org.springframework.web.socket.server.HandshakeInterceptor;
+import org.springframework.web.socket.server.support.OriginHandshakeInterceptor;
 import org.springframework.web.socket.server.support.WebSocketHttpRequestHandler;
 
 /**
@@ -103,6 +106,9 @@ public class GraphQlWebSocketHandler extends TextWebSocketHandler implements Sub
 
 	private final HttpMessageConverter<?> converter;
 
+	@Nullable
+	private final CorsConfiguration corsConfiguration;
+
 	private final Map<String, SessionState> sessionInfoMap = new ConcurrentHashMap<>();
 
 	/**
@@ -115,6 +121,22 @@ public class GraphQlWebSocketHandler extends TextWebSocketHandler implements Sub
 	public GraphQlWebSocketHandler(
 			WebGraphQlHandler graphQlHandler, HttpMessageConverter<?> converter, Duration connectionInitTimeout) {
 
+		this(graphQlHandler, converter, connectionInitTimeout, new CorsConfiguration());
+	}
+
+	/**
+	 * Create a new instance.
+	 * @param graphQlHandler common handler for GraphQL over WebSocket requests
+	 * @param converter for JSON encoding and decoding
+	 * @param connectionInitTimeout how long to wait after the establishment of
+	 * the WebSocket for the {@code "connection_ini"} message from the client.
+	 * @param corsConfiguration the CORS configuration to use, a {@code null}
+	 * configuration means no CORS check.
+	 */
+	public GraphQlWebSocketHandler(
+			WebGraphQlHandler graphQlHandler, HttpMessageConverter<?> converter, Duration connectionInitTimeout,
+			@Nullable CorsConfiguration corsConfiguration) {
+
 		Assert.notNull(graphQlHandler, "WebGraphQlHandler is required");
 		Assert.notNull(converter, "HttpMessageConverter for JSON is required");
 
@@ -123,6 +145,7 @@ public class GraphQlWebSocketHandler extends TextWebSocketHandler implements Sub
 		this.webSocketGraphQlInterceptor = this.graphQlHandler.getWebSocketInterceptor();
 		this.initTimeoutDuration = connectionInitTimeout;
 		this.converter = converter;
+		this.corsConfiguration = corsConfiguration;
 	}
 
 	@Override
@@ -137,8 +160,31 @@ public class GraphQlWebSocketHandler extends TextWebSocketHandler implements Sub
 	 */
 	public WebSocketHttpRequestHandler asWebSocketHttpRequestHandler(HandshakeHandler handshakeHandler) {
 		WebSocketHttpRequestHandler handler = new WebSocketHttpRequestHandler(this, handshakeHandler);
-		handler.setHandshakeInterceptors(Collections.singletonList(this.contextHandshakeInterceptor));
+		List<HandshakeInterceptor> interceptors = new ArrayList<>(2);
+		OriginHandshakeInterceptor originHandshakeInterceptor = getOriginHandshakeInterceptor();
+		if (originHandshakeInterceptor != null) {
+			interceptors.add(originHandshakeInterceptor);
+		}
+		interceptors.add(this.contextHandshakeInterceptor);
+		handler.setHandshakeInterceptors(interceptors);
 		return handler;
+	}
+
+	@Nullable
+	private OriginHandshakeInterceptor getOriginHandshakeInterceptor() {
+		if (this.corsConfiguration != null) {
+			OriginHandshakeInterceptor interceptor = new OriginHandshakeInterceptor();
+			List<String> allowedOrigins = this.corsConfiguration.getAllowedOrigins();
+			if (allowedOrigins != null) {
+				interceptor.setAllowedOrigins(allowedOrigins);
+			}
+			List<String> allowedOriginPatterns = this.corsConfiguration.getAllowedOriginPatterns();
+			if (allowedOriginPatterns != null) {
+				interceptor.setAllowedOriginPatterns(allowedOriginPatterns);
+			}
+			return interceptor;
+		}
+		return null;
 	}
 
 
