@@ -23,10 +23,12 @@ import reactor.core.publisher.Mono;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.MediaType;
+import org.springframework.lang.Nullable;
 import org.springframework.util.StringUtils;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import org.springframework.web.util.UriBuilder;
+import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Spring WebFlux handler to serve a GraphiQl UI page.
@@ -72,9 +74,37 @@ public class GraphiQlHandler {
 	 * is missing, add it and redirect back to the same URL.
 	 */
 	public Mono<ServerResponse> handleRequest(ServerRequest request) {
-		return (request.queryParam("path").isPresent() ?
-				ServerResponse.ok().contentType(MediaType.TEXT_HTML).bodyValue(this.htmlResource) :
-				ServerResponse.temporaryRedirect(getRedirectUrl(request)).build());
+		if (request.queryParam("path").isPresent()) {
+			return serveGraphiQlPage(request);
+		}
+		else {
+			return ServerResponse.temporaryRedirect(getRedirectUrl(request)).build();
+		}
+	}
+
+	private Mono<ServerResponse> serveGraphiQlPage(ServerRequest request) {
+		if (!isExpectedPath(request, "path", this.graphQlPath) ||
+				!isExpectedPath(request, "wsPath", this.graphQlWsPath)) {
+			return ServerResponse.badRequest().build();
+		}
+		return ServerResponse.ok().contentType(MediaType.TEXT_HTML).bodyValue(this.htmlResource);
+	}
+
+	/**
+	 * Check that the given query parameter, if present, is exactly the
+	 * same-origin relative path that this handler would itself generate for
+	 * a redirect (see {@link #getRedirectUrl}). This avoids having to parse
+	 * and validate an arbitrary, possibly absolute, client-supplied URL.
+	 */
+	private boolean isExpectedPath(ServerRequest request, String paramName, @Nullable String configuredPath) {
+		return request.queryParam(paramName)
+				.map((value) -> StringUtils.hasText(configuredPath) && value.equals(expandPath(request, configuredPath)))
+				.orElse(true);
+	}
+
+	private String expandPath(ServerRequest request, String path) {
+		String pathWithContext = applyContextPath(request, path);
+		return UriComponentsBuilder.fromPath(pathWithContext).build().expand(request.pathVariables()).toUriString();
 	}
 
 	private URI getRedirectUrl(ServerRequest request) {
