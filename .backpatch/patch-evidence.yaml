@@ -1,22 +1,37 @@
 schema: osera-patch-evidence/0.1.0
 producer: moderne
-release: 1.0.6.1-backpatch-00002
+release: 1.0.6.1-backpatch-00003
 baseline: v1.0.6+backpatch.baseline
 fixes:
   - cve: CVE-2026-41700
-    upstream: https://nvd.nist.gov/vuln/detail/CVE-2026-41700
+    upstream_fix_url: https://github.com/spring-projects/spring-graphql/commit/c21ee6ec0eab12d71b4abed659e5cf738b0e39eb
+    advisory_url: https://nvd.nist.gov/vuln/detail/CVE-2026-41700
+    patch_commit_url: https://github.com/moderne-backpatch-alliance/backpatch-spring-graphql/commit/2f28cf0
+    basis: backport
     artifacts:
       - org.springframework.graphql:spring-graphql
     note: Carried from 1.0.6.1-backpatch-00001; ported onto 1.0.6; fixed at 1.0.6.1-backpatch-00001 (backpatch-spring-graphql@2f28cf0).
   - cve: CVE-2026-41856
-    upstream: https://nvd.nist.gov/vuln/detail/CVE-2026-41856
+    upstream_fix_url: https://github.com/spring-projects/spring-graphql/commit/63a89ed1379be646822dca9779b15dbf2ce45839
+    advisory_url: https://nvd.nist.gov/vuln/detail/CVE-2026-41856
+    patch_commit_url: https://github.com/moderne-backpatch-alliance/backpatch-spring-graphql/compare/82d4ab2~1...a684c5d
+    basis: backport
     artifacts:
       - org.springframework.graphql:spring-graphql
-    note: New in this release; ported onto 1.0.6; fixed at 1.0.6.1-backpatch-00002 (backpatch-spring-graphql@82d4ab2..a684c5d).
+    note: Carried from 1.0.6.1-backpatch-00002; ported onto 1.0.6; fixed at 1.0.6.1-backpatch-00002 (backpatch-spring-graphql@82d4ab2..a684c5d).
+  - cve: CVE-2026-59286
+    upstream_fix_url: https://github.com/spring-projects/spring-graphql/commit/a386b50db854ce54b018413f8c5345d4767b2fad
+    advisory_url: https://nvd.nist.gov/vuln/detail/CVE-2026-59286
+    patch_commit_url: https://github.com/moderne-backpatch-alliance/backpatch-spring-graphql/commit/b74a20f
+    basis: adapted
+    artifacts:
+      - org.springframework.graphql:spring-graphql
+    note: New in this release; ported onto 1.0.6; fixed at 1.0.6.1-backpatch-00003 (backpatch-spring-graphql@b74a20f).
 tests:
-  commit: a684c5dbd02f3a38bb7c17a1e4043bc564d9b992
-  command: ./gradlew --quiet --no-daemon -I init-backpatch.gradle -Dbackpatch.version=1.0.6.1-backpatch-00002 -Dbackpatch.repository.url=file:///tmp/osera-unused-repo -Dbackpatch.compile.jdk=17 -p spring-graphql test --rerun-tasks --tests org.springframework.graphql.data.method.HandlerMethodTests
-  runtime: OpenJDK 17.0.9 (Zulu), Gradle wrapper of the repository
-  report: spring-graphql-1.0.6.1-backpatch-00002-tests.zip
+  commit: b74a20fb8775cf53b3e33e9e718a1c73c7cda960
+  command: ./gradlew --no-daemon -I <alliance>/ecosystem/gradle/init-backpatch.gradle -Dbackpatch.version=1.0.6.1-backpatch-00003 -Dbackpatch.repository.url=file:///nonexistent -Dbackpatch.compile.jdk=8 -p spring-graphql test --rerun-tasks --continue
+  runtime: Gradle wrapper of the repository on Zulu 17.0.16; compiled and tested on the build's Java 8 toolchain, Zulu 8u382
+  report: spring-graphql-1.0.6.1-backpatch-00003-tests.zip
+  report_sha256: d63cea725e9a7a2b323a0f84ff5e28726115b7a2c22a978bde15bac5b6f0501a
   result: pass
-  note: the regression tests the fix commits touched, 1 test(s) run, 0 failed, at the tested commit
+  note: the full spring-graphql module suite, 286 tests run, 0 failed, 0 errors, 1 skipped, at the tested commit
